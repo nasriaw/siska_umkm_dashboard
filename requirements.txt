@@ -1,7 +1,5 @@
 streamlit
 pandas
-
-io
 reportlab
 matplotlib
 numpy
