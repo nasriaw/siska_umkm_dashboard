@@ -1,6 +1,7 @@
 streamlit
-pandas 
-datetime 
+sqlite
+pandas
+datetime
 io
 reportlab
 matplotlib
