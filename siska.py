@@ -396,7 +396,7 @@ elif menu == "Akun":
             })
             save_data('akun', new_akun)
             st.success("Akun berhasil ditambahkan!")
-            st.experimental_rerun()
+            st.rerun()
 
 elif menu == "Transaksi":
     st.title("Manajemen Transaksi")
@@ -433,7 +433,7 @@ elif menu == "Transaksi":
                 })
                 save_data('transaksi', new_transaksi)
                 st.success("Transaksi berhasil disimpan!")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Akun tidak ditemukan!")
     
@@ -477,7 +477,7 @@ elif menu == "Kategori":
             })
             save_data('kategori', new_kategori)
             st.success("Kategori berhasil ditambahkan!")
-            st.experimental_rerun()
+            st.rerun()
 
 elif menu == "Laporan":
     st.title("Laporan Keuangan")
@@ -534,7 +534,7 @@ elif menu == "Pajak":
             })
             save_data('pajak', new_pajak)
             st.success("Pajak berhasil ditambahkan!")
-            st.experimental_rerun()
+            st.rerun()
 
 elif menu == "Aset":
     st.title("Manajemen Aset")
@@ -574,7 +574,7 @@ elif menu == "Aset":
             })
             save_data('aset', new_aset)
             st.success("Aset berhasil ditambahkan!")
-            st.experimental_rerun()
+            st.rerun()
 
 elif menu == "Neraca":
     st.title("Neraca")
@@ -736,11 +736,11 @@ elif menu == "Admin":
                 conn.commit()
                 conn.close()
                 st.success("User berhasil ditambahkan!")
-                st.experimental_rerun()
+                st.rerun()
         
         # Logout
         if st.button("Logout"):
             del st.session_state['logged_in']
             del st.session_state['username']
             del st.session_state['role']
-            st.experimental_rerun()
+            st.rerun()
