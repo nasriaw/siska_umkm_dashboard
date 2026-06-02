@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 from datetime import datetime, date
 import io
+import os
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.units import inch
@@ -297,6 +298,11 @@ init_db()
 
 # Sidebar
 with st.sidebar:
+    # Tampilkan logo jika file ada
+    logo_path = "logo_SISKA.png"
+    if os.path.exists(logo_path):
+        st.image(logo_path, use_container_width=False, width=150)
+    
     st.markdown("# SISKA")
     st.markdown("### Sistem Informasi Sederhana Keuangan & Akuntansi untuk UMKM")
     
