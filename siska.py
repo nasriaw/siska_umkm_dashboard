@@ -301,7 +301,7 @@ with st.sidebar:
     # Tampilkan logo jika file ada
     logo_path = "logo_SISKA.png"
     if os.path.exists(logo_path):
-        st.image(logo_path, use_container_width=False, width=150)
+        st.image(logo_path, use_container_width=True)
     
     st.markdown("# SISKA")
     st.markdown("### Sistem Informasi Sederhana Keuangan & Akuntansi untuk UMKM")
