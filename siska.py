@@ -303,9 +303,6 @@ with st.sidebar:
     if os.path.exists(logo_path):
         st.image(logo_path, use_container_width=True)
     
-    st.markdown("# SISKA")
-    st.markdown("### Sistem Informasi Sederhana Keuangan & Akuntansi untuk UMKM")
-    
     st.markdown("---")
     
     # Menu navigasi
