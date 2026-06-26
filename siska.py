@@ -10,6 +10,8 @@ from reportlab.lib.units import inch
 import matplotlib.pyplot as plt
 import numpy as np
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Konfigurasi halaman
 st.set_page_config(
     page_title="SISKA - Sistem Informasi Sederhana Keuangan & Akuntansi",
@@ -299,9 +301,12 @@ init_db()
 # Sidebar
 with st.sidebar:
     # Tampilkan logo jika file ada
-    logo_path = "logo_SISKA.png"
+    logo_path = os.path.join(BASE_DIR, "logo_SISKA.png")
     if os.path.exists(logo_path):
-        st.image(logo_path, use_container_width=True)
+        try:
+            st.image(logo_path, use_column_width=True)
+        except TypeError:
+            st.image(logo_path)
     
     st.markdown("---")
     
@@ -526,7 +531,7 @@ elif menu == "Pajak":
             jenis_pajak = st.text_input("Jenis Pajak", value="Pajak Baru")
         
         with col2:
-            tarif = st.number_input("Tarif (%)", min_value=0, max_value=100, step=0.1, value=10)
+            tarif = st.number_input("Tarif (%)", min_value=0.0, max_value=100.0, step=0.1, value=10.0)
         
         submitted = st.form_submit_button("Simpan Pajak")
         
