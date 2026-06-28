@@ -5,4 +5,3 @@ reportlab
 matplotlib
 numpy
 pdfplumber
-PyPDF2
