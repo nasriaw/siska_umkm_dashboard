@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, date
 import io
 import os
+import re
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.units import inch
@@ -238,6 +239,209 @@ def get_akun_id(nama_akun):
     conn.close()
     return result[0] if result else None
 
+# Fungsi bantu untuk parsing angka di PDF rek koran
+def normalize_amount(value):
+    text = str(value or '').strip()
+    if not text:
+        return 0.0
+    negative = text.startswith('-') or ('(' in text and ')' in text)
+    text = text.replace('(', '').replace(')', '')
+    text = re.sub(r'[^\u0000-\u007f]', '', text)
+    text = text.replace('Rp', '').replace('IDR', '').strip()
+
+    if text.count(',') > 0 and text.count('.') > 0:
+        if text.rfind(',') > text.rfind('.'):
+            # format 1.234.567,89
+            text = text.replace('.', '').replace(',', '.')
+        else:
+            # format 1,234,567.89
+            text = text.replace(',', '')
+    elif text.count(',') > 0:
+        parts = text.split(',')
+        if len(parts[-1]) == 2:
+            text = ''.join(parts[:-1]).replace('.', '') + '.' + parts[-1]
+        else:
+            text = ''.join(parts)
+    elif text.count('.') > 0:
+        parts = text.split('.')
+        if len(parts[-1]) == 3:
+            text = ''.join(parts)
+        elif len(parts[-1]) == 2:
+            text = text
+        else:
+            text = ''.join(parts)
+
+    try:
+        return float(text) * (-1 if negative else 1)
+    except ValueError:
+        return 0.0
+
+# Fungsi bantu untuk menormalisasi tanggal dari format PDF
+def normalize_date(value):
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y"):
+        try:
+            return datetime.strptime(value, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return value
+
+# Ekstrak teks dari PDF, coba pdfplumber dulu lalu PyPDF2 sebagai fallback
+def extract_pdf_text(file_buffer):
+    file_buffer.seek(0)
+    try:
+        import pdfplumber
+        with pdfplumber.open(file_buffer) as pdf:
+            return '\n'.join(page.extract_text() or '' for page in pdf.pages)
+    except Exception:
+        file_buffer.seek(0)
+        try:
+            from PyPDF2 import PdfReader
+            reader = PdfReader(file_buffer)
+            return '\n'.join(page.extract_text() or '' for page in reader.pages)
+        except Exception:
+            return None
+
+# Parse teks PDF menjadi DataFrame transaksi harian
+def parse_bank_statement_text(text):
+    rows = []
+    date_pattern = re.compile(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b')
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+    for line in lines:
+        match = date_pattern.search(line)
+        if not match:
+            continue
+
+        tanggal_raw = match.group(0)
+        tanggal = normalize_date(tanggal_raw)
+        after_date = line[match.end():].strip()
+        if not after_date:
+            continue
+
+        amount_pattern = re.compile(r'(?<![\dA-Za-z:/-])\(?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?\)?(?![\dA-Za-z:/-])')
+        amounts = [m.group(0) for m in amount_pattern.finditer(after_date)]
+        numbers = [normalize_amount(amount) for amount in amounts]
+
+        if len(numbers) >= 3:
+            debit, kredit, saldo = numbers[-3], numbers[-2], numbers[-1]
+            description = after_date
+            for amount in amounts[-3:]:
+                description = description.replace(amount, '', 1)
+        elif len(numbers) == 2:
+            debit, kredit = numbers
+            saldo = None
+            description = after_date
+            description = description.replace(amounts[-2], '', 1).replace(amounts[-1], '', 1)
+        elif len(numbers) == 1:
+            debit = 0.0
+            kredit = 0.0
+            saldo = numbers[0]
+            description = after_date.replace(amounts[0], '', 1)
+        else:
+            continue
+
+        description = ' '.join(description.split())
+        rows.append({
+            'Tanggal': tanggal,
+            'Keterangan': description,
+            'Debit': debit,
+            'Kredit': kredit,
+            'Saldo': saldo
+        })
+
+    return pd.DataFrame(rows)
+
+# Parse file PDF menjadi DataFrame transaksi; kembalikan pesan error bila gagal
+def parse_bank_statement_pdf(uploaded_file):
+    file_buffer = io.BytesIO(uploaded_file.read())
+    text = extract_pdf_text(file_buffer)
+    if text is None:
+        return None, "Library PDF tidak tersedia. Install pdfplumber atau PyPDF2 terlebih dahulu."
+
+    df = parse_bank_statement_text(text)
+    if df.empty:
+        return None, "Tidak ditemukan baris transaksi dalam PDF. Pastikan format pdf sesuai LAPORAN TRANSAKSI FINANSIAL STATEMENT OF FINANCIAL TRANSACTION."
+
+    return df, None
+
+# Buat buffer spreadsheet dan format file yang bisa didownload
+def create_spreadsheet_buffer(df):
+    try:
+        buffer = io.BytesIO()
+        df.to_excel(buffer, index=False, engine='openpyxl')
+        buffer.seek(0)
+        return buffer, 'rek_koran_transaksi_harian.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    except Exception:
+        text_buffer = io.StringIO()
+        df.to_csv(text_buffer, index=False)
+        return text_buffer.getvalue().encode('utf-8'), 'rek_koran_transaksi_harian.csv', 'text/csv'
+
+# Fungsi untuk menghitung ringkasan rekening koran
+def summarize_bank_statement(df):
+    df = df.copy()
+    df['Debit'] = pd.to_numeric(df['Debit'], errors='coerce').fillna(0)
+    df['Kredit'] = pd.to_numeric(df['Kredit'], errors='coerce').fillna(0)
+    df['Saldo'] = pd.to_numeric(df['Saldo'], errors='coerce')
+    df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
+
+    total_pemasukan = df['Kredit'].sum()
+    total_pengeluaran = df['Debit'].sum()
+    net_cashflow = total_pemasukan - total_pengeluaran
+
+    if df['Saldo'].notna().any():
+        first_valid = df['Saldo'].first_valid_index()
+        last_valid = df['Saldo'].last_valid_index()
+        saldo_awal = float(df.loc[first_valid, 'Saldo']) if first_valid is not None else 0.0
+        saldo_akhir = float(df.loc[last_valid, 'Saldo']) if last_valid is not None else saldo_awal + net_cashflow
+        saldo_harian = df['Saldo'].ffill()
+        saldo_harian = saldo_harian.bfill()
+        saldo_harian = saldo_harian.fillna(saldo_awal)
+    else:
+        saldo_awal = 0.0
+        saldo_akhir = saldo_awal + net_cashflow
+        saldo_harian = saldo_awal + df['Kredit'].cumsum() - df['Debit'].cumsum()
+
+    df['Saldo_Harian'] = saldo_harian
+
+    def detect_category(text):
+        lower_text = str(text).lower()
+        rules = {
+            'penjualan': 'Pendapatan',
+            'jual': 'Pendapatan',
+            'pemasukan': 'Pendapatan',
+            'transfer': 'Transfer',
+            'gaji': 'Biaya',
+            'sewa': 'Biaya',
+            'listrik': 'Biaya',
+            'air': 'Biaya',
+            'transport': 'Biaya',
+            'belanja': 'Biaya',
+            'pembayaran': 'Biaya'
+        }
+        for keyword, category in rules.items():
+            if keyword in lower_text:
+                return category
+        return 'Lainnya'
+
+    df['Kategori'] = df['Keterangan'].apply(detect_category)
+
+    kategori_summary = df.groupby('Kategori', as_index=False).agg({
+        'Debit': 'sum',
+        'Kredit': 'sum'
+    })
+    kategori_summary['Net'] = kategori_summary['Kredit'] - kategori_summary['Debit']
+
+    return {
+        'saldo_awal': saldo_awal,
+        'saldo_akhir': saldo_akhir,
+        'total_pemasukan': total_pemasukan,
+        'total_pengeluaran': total_pengeluaran,
+        'net_cashflow': net_cashflow,
+        'trend_df': df[['Tanggal', 'Saldo_Harian']].dropna(subset=['Tanggal']),
+        'kategori_summary': kategori_summary,
+        'detail_df': df
+    }
+
 # Fungsi untuk membuat PDF
 def create_pdf_laporan(data, filename):
     buffer = io.BytesIO()
@@ -313,7 +517,7 @@ with st.sidebar:
     # Menu navigasi
     menu = st.radio(
         "Menu",
-        ["Dashboard", "Akun", "Transaksi", "Kategori", "Laporan", "Pajak", "Aset", "Neraca", "Print Laporan PDF", "Admin"]
+        ["Dashboard", "Akun", "Transaksi", "Kategori", "Konversi Rekening e-statement", "Laporan", "Pajak", "Aset", "Neraca", "Print Laporan PDF", "Admin"]
     )
     
     st.markdown("---")
@@ -486,6 +690,55 @@ elif menu == "Kategori":
             save_data('kategori', new_kategori)
             st.success("Kategori berhasil ditambahkan!")
             st.rerun()
+
+elif menu == "Konversi Rekening e-statement":
+    st.title("Konversi Rekening atau e-statement Bank menjadi Tabel Transaksi Harian")
+    st.markdown("Upload file PDF rekening LAPORAN TRANSAKSI FINANSIAL STATEMENT OF FINANCIAL TRANSACTION untuk di konversi menjadi tabel transaksi harian. Pastikan format standar dari Bank")
+    uploaded_file = st.file_uploader("Pilih file rek koran atau e-statement format.pdf", type=["pdf"])
+
+    if uploaded_file is not None:
+        df, error = parse_bank_statement_pdf(uploaded_file)
+        if error:
+            st.error(error)
+        else:
+            st.success("PDF berhasil dikonversi menjadi tabel transaksi.")
+            summary = summarize_bank_statement(df)
+
+            col1, col2, col3, col4, col5 = st.columns(5)
+            col1.metric("Saldo Awal", f"Rp {summary['saldo_awal']:,.0f}")
+            col2.metric("Saldo Akhir", f"Rp {summary['saldo_akhir']:,.0f}")
+            col3.metric("Total Pemasukan", f"Rp {summary['total_pemasukan']:,.0f}")
+            col4.metric("Total Pengeluaran", f"Rp {summary['total_pengeluaran']:,.0f}")
+            col5.metric("Net Cashflow", f"Rp {summary['net_cashflow']:,.0f}")
+
+            st.markdown("---")
+            trend_tab, kategori_tab = st.tabs(["Trend Saldo", "Kategori"])
+
+            with trend_tab:
+                st.markdown("### Trend Saldo Harian")
+                trend_df = summary['trend_df'].set_index('Tanggal')
+                if not trend_df.empty:
+                    st.line_chart(trend_df.rename(columns={'Saldo_Harian': 'Saldo Harian'}))
+                else:
+                    st.info("Tidak ada data saldo harian yang dapat ditampilkan.")
+
+            with kategori_tab:
+                st.markdown("### Kategori Transaksi")
+                st.dataframe(summary['kategori_summary'], use_container_width=True)
+                if not summary['kategori_summary'].empty:
+                    kategori_chart = summary['kategori_summary'].set_index('Kategori')[['Debit', 'Kredit']]
+                    st.bar_chart(kategori_chart)
+
+            st.markdown("### Data Transaksi Harian")
+            st.dataframe(summary['detail_df'], use_container_width=True)
+
+            buffer, file_name, mime = create_spreadsheet_buffer(summary['detail_df'])
+            st.download_button(
+                label="Download Spreadsheet Transaksi Harian",
+                data=buffer,
+                file_name=file_name,
+                mime=mime
+            )
 
 elif menu == "Laporan":
     st.title("Laporan Keuangan")
