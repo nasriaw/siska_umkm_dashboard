@@ -5,6 +5,4 @@ io
 reportlab
 matplotlib
 numpy
-reportlab.pdfgen 
-reportlab.lib.pagesizes 
-reportlab.lib.units
+reportlab
