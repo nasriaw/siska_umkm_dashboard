@@ -30,8 +30,8 @@ def check_credentials(username, password, allowed_roles=None):
     """Verify username/password against users table or Streamlit Secrets."""
     try:
         # Cek kecocokan dengan password admin utama dari Secrets terlebih dahulu
-        admin_secret_pwd = st.secrets.get("ADMIN_PASSWORD", "siska123")
-        if username == "admin" and password == admin_secret_pwd:
+        admin_secret_pwd = st.secrets.get("ADMIN_PASSWORD", "")
+        if admin_secret_pwd and username == "admin" and password == admin_secret_pwd:
             return True
 
         # Jika tidak cocok dengan secrets, cek ke database sqlite
@@ -117,9 +117,10 @@ def seed_default_data(cursor):
     cursor.execute("INSERT INTO pajak (jenis_pajak, tarif) VALUES (?, ?)",
                    ('PPh 23', 2.0))
 
-    # default admin credentials (changed per user request)
+    # Mengambil password aman dari secrets untuk inisialisasi awal database
+    admin_live_pwd = st.secrets.get("ADMIN_PASSWORD", "default_aman_sementara")
     cursor.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                   ('admin', 'siska123', 'admin'))
+                   ('admin', admin_live_pwd, 'admin'))
 
     cursor.execute("INSERT INTO transaksi (tanggal, keterangan, akun_id, debit, kredit, bukti_transaksi, approved, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                    ('2026-06-01', 'Penjualan Jasa Desain', 4, 0.0, 5000000.0, 'INV-001', 1, 'admin'))
