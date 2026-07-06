@@ -939,7 +939,7 @@ def main():
                 if check_credentials(ce_user, ce_pwd):
                     st.session_state['conv_est_authenticated'] = True
                     st.success('Login berhasil — Anda dapat mengunggah file.')
-                    st.rerun
+                    st.rerun()
                 else:
                     st.error('Username atau password salah')
             # do not show uploader until authenticated
@@ -949,7 +949,7 @@ def main():
             with col_auth_right:
                 if st.button('Logout (e-statement)'):
                     st.session_state['conv_est_authenticated'] = False
-                    st.rerun
+                    st.rerun()
             uploaded_file = st.file_uploader("Pilih file rek koran atau e-statement format.pdf", type=["pdf"])
 
         if uploaded_file is not None:
@@ -1015,7 +1015,7 @@ def main():
                 if check_credentials(ck_user, ck_pwd):
                     st.session_state['conv_koran_authenticated'] = True
                     st.success('Login berhasil — Anda dapat mengunggah file.')
-                    st.rerun
+                    st.rerun()
                 else:
                     st.error('Username atau password salah')
             uploaded_file2 = None
@@ -1024,7 +1024,7 @@ def main():
             with col_auth_b:
                 if st.button('Logout (Rekening Koran)'):
                     st.session_state['conv_koran_authenticated'] = False
-                    st.rerun
+                    st.rerun()
 
             # show uploader and sample button only when authenticated
             sample_name = "rek_koran_STIA_BNI.pdf"
@@ -1185,17 +1185,17 @@ def main():
                 if st.button('Reset Semua Data', use_container_width=True):
                     reset_all_data()
                     st.success('Semua data berhasil direset.')
-                    st.rerun
+                    st.rerun()
             with col2:
                 if st.button('Gunakan Simulasi (Data Default)', use_container_width=True):
                     use_simulation_data()
                     st.success('Data simulasi default berhasil dipasang.')
-                    st.rerun
+                    st.rerun()
 
             if st.button('Logout'):
                 st.session_state['admin_authenticated'] = False
                 st.success('Logout berhasil')
-                st.rerun
+                st.rerun()
 
     elif menu == "Laporan":
         st.title("Laporan Keuangan")
