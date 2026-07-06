@@ -26,10 +26,15 @@ def should_seed_defaults():
     """
     return not os.path.exists(SKIP_SEED_FILE)
 
-
 def check_credentials(username, password, allowed_roles=None):
-    """Verify username/password against users table. Optionally restrict to allowed_roles list."""
+    """Verify username/password against users table or Streamlit Secrets."""
     try:
+        # Cek kecocokan dengan password admin utama dari Secrets terlebih dahulu
+        admin_secret_pwd = st.secrets.get("ADMIN_PASSWORD", "siska123")
+        if username == "admin" and password == admin_secret_pwd:
+            return True
+
+        # Jika tidak cocok dengan secrets, cek ke database sqlite
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("SELECT password, role FROM users WHERE username = ?", (username,))
@@ -934,7 +939,7 @@ def main():
                 if check_credentials(ce_user, ce_pwd):
                     st.session_state['conv_est_authenticated'] = True
                     st.success('Login berhasil — Anda dapat mengunggah file.')
-                    st.experimental_rerun()
+                    st.rerun
                 else:
                     st.error('Username atau password salah')
             # do not show uploader until authenticated
@@ -944,7 +949,7 @@ def main():
             with col_auth_right:
                 if st.button('Logout (e-statement)'):
                     st.session_state['conv_est_authenticated'] = False
-                    st.experimental_rerun()
+                    st.rerun
             uploaded_file = st.file_uploader("Pilih file rek koran atau e-statement format.pdf", type=["pdf"])
 
         if uploaded_file is not None:
@@ -1010,7 +1015,7 @@ def main():
                 if check_credentials(ck_user, ck_pwd):
                     st.session_state['conv_koran_authenticated'] = True
                     st.success('Login berhasil — Anda dapat mengunggah file.')
-                    st.experimental_rerun()
+                    st.rerun
                 else:
                     st.error('Username atau password salah')
             uploaded_file2 = None
@@ -1019,7 +1024,7 @@ def main():
             with col_auth_b:
                 if st.button('Logout (Rekening Koran)'):
                     st.session_state['conv_koran_authenticated'] = False
-                    st.experimental_rerun()
+                    st.rerun
 
             # show uploader and sample button only when authenticated
             sample_name = "rek_koran_STIA_BNI.pdf"
@@ -1166,20 +1171,13 @@ def main():
                 submitted = st.form_submit_button('Login')
 
             if submitted:
-                try:
-                    conn = get_db_connection()
-                    cur = conn.cursor()
-                    cur.execute("SELECT password, role FROM users WHERE username = ?", (uname,))
-                    row = cur.fetchone()
-                    conn.close()
-                    if row and row[0] == pwd and (row[1] == 'admin' or row[1] == 'superadmin'):
-                        st.session_state['admin_authenticated'] = True
-                        st.success('Login berhasil')
-                        st.experimental_rerun()
-                    else:
-                        st.error('Username atau password salah')
-                except Exception:
-                    st.error('Gagal memverifikasi kredensial. Periksa siska.log untuk detail.')
+                # Menggunakan check_credentials yang sudah terintegrasi dengan Secrets
+                if check_credentials(uname, pwd, allowed_roles=['admin', 'superadmin']) or (uname == "admin" and pwd == st.secrets.get("ADMIN_PASSWORD", "siska123")):
+                    st.session_state['admin_authenticated'] = True
+                    st.success('Login berhasil')
+                    st.rerun()  # Mengganti st.rerun
+                else:
+                    st.error('Username atau password salah')
         else:
             st.markdown('Anda login sebagai admin.')
             col1, col2 = st.columns(2)
@@ -1187,17 +1185,17 @@ def main():
                 if st.button('Reset Semua Data', use_container_width=True):
                     reset_all_data()
                     st.success('Semua data berhasil direset.')
-                    st.experimental_rerun()
+                    st.rerun
             with col2:
                 if st.button('Gunakan Simulasi (Data Default)', use_container_width=True):
                     use_simulation_data()
                     st.success('Data simulasi default berhasil dipasang.')
-                    st.experimental_rerun()
+                    st.rerun
 
             if st.button('Logout'):
                 st.session_state['admin_authenticated'] = False
                 st.success('Logout berhasil')
-                st.experimental_rerun()
+                st.rerun
 
     elif menu == "Laporan":
         st.title("Laporan Keuangan")
