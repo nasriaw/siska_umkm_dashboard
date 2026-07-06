@@ -1172,11 +1172,11 @@ def main():
                 submitted = st.form_submit_button('Login')
 
             if submitted:
-                # Menggunakan check_credentials yang sudah terintegrasi dengan Secrets
-                if check_credentials(uname, pwd, allowed_roles=['admin', 'superadmin']) or (uname == "admin" and pwd == st.secrets.get("ADMIN_PASSWORD", "siska123")):
+                # Cukup panggil check_credentials, verifikasi Secrets sudah ditangani di dalam fungsi tersebut
+                if check_credentials(uname, pwd, allowed_roles=['admin', 'superadmin']):
                     st.session_state['admin_authenticated'] = True
                     st.success('Login berhasil')
-                    st.rerun()  # Mengganti st.rerun
+                    st.rerun() 
                 else:
                     st.error('Username atau password salah')
         else:
